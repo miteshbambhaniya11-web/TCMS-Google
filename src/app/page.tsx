@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTenant } from '@/context/tenantContext';
@@ -15,6 +15,18 @@ export default function LandingPage() {
   const router = useRouter();
   const { login, refreshData } = useTenant();
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
+  const [syncStatus, setSyncStatus] = useState<'syncing' | 'connected' | 'error'>('connected');
+
+  useEffect(() => {
+    localDb.syncStatusListener = (status) => {
+      setSyncStatus(status);
+    };
+
+    localDb.setupRealtime(() => {
+      refreshData();
+    });
+  }, [refreshData]);
+
   
   // Login Form
   const [loginEmail, setLoginEmail] = useState('');
@@ -85,14 +97,26 @@ export default function LandingPage() {
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-sky-500 selection:text-white overflow-x-hidden">
       {/* Navbar */}
       <header className="border-b border-slate-800 bg-slate-950/80 backdrop-blur-md sticky top-0 z-50 px-6 py-4 flex items-center justify-between max-w-7xl mx-auto w-full">
-        <div className="flex items-center gap-2">
-          <div className="bg-sky-500 p-2 rounded-lg text-white">
-            <Truck size={24} className="animate-pulse" />
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <div className="bg-sky-500 p-2 rounded-lg text-white">
+              <Truck size={24} className="animate-pulse" />
+            </div>
+            <div>
+              <span className="font-extrabold text-xl tracking-tight text-white">TCMS</span>
+              <span className="text-xs block text-slate-400 font-semibold leading-none">India's Transport ERP</span>
+            </div>
           </div>
-          <div>
-            <span className="font-extrabold text-xl tracking-tight text-white">TCMS</span>
-            <span className="text-xs block text-slate-400 font-semibold leading-none">India's Transport ERP</span>
-          </div>
+          
+          <span className={`text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1 ${
+            syncStatus === 'syncing' ? 'text-amber-400 bg-amber-400/10 border border-amber-400/20' :
+            syncStatus === 'connected' ? 'text-emerald-400 bg-emerald-400/10 border border-emerald-400/20' :
+            'text-rose-400 bg-rose-400/10 border border-rose-400/20'
+          }`} title="Supabase Database Status">
+            {syncStatus === 'syncing' && '🔄 Syncing...'}
+            {syncStatus === 'connected' && '☁️ Cloud Connected'}
+            {syncStatus === 'error' && '⚠️ Sync Offline'}
+          </span>
         </div>
 
         <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-300">
