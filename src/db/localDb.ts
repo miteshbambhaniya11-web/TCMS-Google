@@ -1,4 +1,18 @@
 // Local DB Manager with Mock Schema and Persistence
+import { supabase } from '@/lib/supabaseClient';
+
+async function syncToSupabase(key: string, data: any) {
+  try {
+    const { error } = await supabase
+      .from('sync_store')
+      .upsert({ key, value: data, updated_at: new Date().toISOString() });
+    if (error) {
+      console.warn(`Supabase sync failed for ${key}:`, error);
+    }
+  } catch (err) {
+    console.error(`Supabase sync exception for ${key}:`, err);
+  }
+}
 export interface Tenant {
   id: string;
   name: string;
@@ -791,6 +805,9 @@ const DEFAULT_ACTIVITY_LOGS: ActivityLog[] = [
 ];
 
 class LocalDb {
+  syncStatusListener: ((status: 'syncing' | 'connected' | 'error') => void) | null = null;
+  isSyncing = false;
+
   constructor() {
     this.initialize();
   }
@@ -799,11 +816,51 @@ class LocalDb {
     return typeof window !== 'undefined';
   }
 
+  async fetchFromSupabase() {
+    if (!this.isBrowser()) return;
+    this.isSyncing = true;
+    if (this.syncStatusListener) this.syncStatusListener('syncing');
+    try {
+      const { data, error } = await supabase
+        .from('sync_store')
+        .select('*');
+      
+      if (error) throw error;
+      
+      if (data && data.length > 0) {
+        for (const row of data) {
+          localStorage.setItem(`tcms_${row.key}`, JSON.stringify(row.value));
+        }
+      }
+      if (this.syncStatusListener) this.syncStatusListener('connected');
+    } catch (err) {
+      console.error('Failed to pull from Supabase:', err);
+      if (this.syncStatusListener) this.syncStatusListener('error');
+    } finally {
+      this.isSyncing = false;
+    }
+  }
+
+  setupRealtime(onSyncUpdate: () => void) {
+    if (!this.isBrowser()) return;
+    supabase
+      .channel('public:sync_store')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sync_store' }, (payload: any) => {
+        const row = payload.new;
+        if (!row || !row.key) return;
+        localStorage.setItem(`tcms_${row.key}`, JSON.stringify(row.value));
+        onSyncUpdate();
+      })
+      .subscribe();
+  }
+
   get<T>(key: string, defaults: T[]): T[] {
     if (!this.isBrowser()) return defaults;
     const value = localStorage.getItem(`tcms_${key}`);
     if (!value) {
       localStorage.setItem(`tcms_${key}`, JSON.stringify(defaults));
+      // Sync defaults to Supabase too
+      syncToSupabase(key, defaults);
       return defaults;
     }
     try {
@@ -816,9 +873,11 @@ class LocalDb {
   set<T>(key: string, value: T[]): void {
     if (!this.isBrowser()) return;
     localStorage.setItem(`tcms_${key}`, JSON.stringify(value));
+    syncToSupabase(key, value);
   }
 
   initialize() {
+    this.fetchFromSupabase();
     let tenants = this.get('tenants', DEFAULT_TENANTS);
     let users = this.get('users', DEFAULT_USERS);
     let contractors = this.get('contractors', DEFAULT_CONTRACTORS);

@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useTenant } from '@/context/tenantContext';
+import { localDb } from '@/db/localDb';
 import { 
   Truck, LayoutDashboard, Calendar, Users, MapPin, 
   Coins, MessageSquare, Map, Cpu, FileSpreadsheet, 
@@ -23,6 +24,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<'syncing' | 'connected' | 'error'>('connected');
 
   // Dynamic notification list
   const [notifications, setNotifications] = useState([
@@ -30,6 +32,17 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
     { id: 2, title: 'AI Delay Alert', text: 'Trip ASC-2026-00002 showing medium delay risk.', type: 'danger' },
     { id: 3, title: 'Fuel Variance Exception', text: 'Trip ASC-2026-00001 refueled with +7L variance.', type: 'info' }
   ]);
+
+  // Sync database state from Supabase
+  useEffect(() => {
+    localDb.syncStatusListener = (status) => {
+      setSyncStatus(status);
+    };
+
+    localDb.setupRealtime(() => {
+      refreshData();
+    });
+  }, [refreshData]);
 
   // Redirect if not logged in
   useEffect(() => {
@@ -232,6 +245,17 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
           {/* Right Side Icons */}
           <div className="flex items-center gap-4">
             
+            {/* Supabase sync status */}
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1 ${
+              syncStatus === 'syncing' ? 'text-amber-400 bg-amber-400/10 border border-amber-400/20' :
+              syncStatus === 'connected' ? 'text-emerald-400 bg-emerald-400/10 border border-emerald-400/20' :
+              'text-rose-400 bg-rose-400/10 border border-rose-400/20'
+            }`} title="Supabase Database Status">
+              {syncStatus === 'syncing' && '🔄 Syncing...'}
+              {syncStatus === 'connected' && '☁️ Cloud Connected'}
+              {syncStatus === 'error' && '⚠️ Sync Offline'}
+            </span>
+
             {/* Active Role tag */}
             <span className="hidden sm:inline-flex bg-sky-500/10 border border-sky-500/20 text-sky-400 text-[10px] font-bold px-2.5 py-1 rounded-full uppercase">
               {activeRole}
