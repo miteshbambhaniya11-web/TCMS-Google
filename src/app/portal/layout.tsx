@@ -39,9 +39,13 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
       setSyncStatus(status);
     };
 
-    localDb.setupRealtime(() => {
+    const unsubscribe = localDb.setupRealtime(() => {
       refreshData();
     });
+
+    return () => {
+      unsubscribe();
+    };
   }, [refreshData]);
 
   // Redirect if not logged in

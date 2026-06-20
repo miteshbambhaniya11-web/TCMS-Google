@@ -22,9 +22,13 @@ export default function LandingPage() {
       setSyncStatus(status);
     };
 
-    localDb.setupRealtime(() => {
+    const unsubscribe = localDb.setupRealtime(() => {
       refreshData();
     });
+
+    return () => {
+      unsubscribe();
+    };
   }, [refreshData]);
 
   

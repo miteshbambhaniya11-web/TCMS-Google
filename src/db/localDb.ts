@@ -847,16 +847,21 @@ class LocalDb {
   }
 
   setupRealtime(onSyncUpdate: () => void) {
-    if (!this.isBrowser() || !supabase) return;
-    supabase
-      .channel('public:sync_store')
+    if (!this.isBrowser() || !supabase) return () => {};
+    const channel = supabase
+      .channel('public:sync_store_tcms')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'sync_store' }, (payload: any) => {
         const row = payload.new;
         if (!row || !row.key) return;
         localStorage.setItem(`tcms_${row.key}`, JSON.stringify(row.value));
         onSyncUpdate();
-      })
-      .subscribe();
+      });
+      
+    channel.subscribe();
+
+    return () => {
+      if (supabase) supabase.removeChannel(channel);
+    };
   }
 
   get<T>(key: string, defaults: T[]): T[] {
