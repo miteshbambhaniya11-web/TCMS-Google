@@ -2,6 +2,7 @@
 import { supabase } from '@/lib/supabaseClient';
 
 async function syncToSupabase(key: string, data: any) {
+  if (!supabase) return;
   try {
     const { error } = await supabase
       .from('sync_store')
@@ -818,6 +819,10 @@ class LocalDb {
 
   async fetchFromSupabase() {
     if (!this.isBrowser()) return;
+    if (!supabase) {
+      if (this.syncStatusListener) this.syncStatusListener('error');
+      return;
+    }
     this.isSyncing = true;
     if (this.syncStatusListener) this.syncStatusListener('syncing');
     try {
@@ -842,7 +847,7 @@ class LocalDb {
   }
 
   setupRealtime(onSyncUpdate: () => void) {
-    if (!this.isBrowser()) return;
+    if (!this.isBrowser() || !supabase) return;
     supabase
       .channel('public:sync_store')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'sync_store' }, (payload: any) => {
